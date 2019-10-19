@@ -38,7 +38,7 @@ class HyperColumns(EncoderDecoder):
             decoder_channels=(256, 128, 64, 32, 16),
             classes=1,
             activation='sigmoid',
-            center=False,  # usefull for VGG models
+            center=None,  # usefull for VGG models
             attention_type=None, 
             tta=False #WIP
     ):
@@ -94,7 +94,7 @@ class Unet(EncoderDecoder):
             decoder_channels=(256, 128, 64, 32, 16),
             classes=1,
             activation='sigmoid',
-            center=False,  # usefull for VGG models
+            center=None,  # usefull for VGG models
             attention_type=None, 
             tta=False
     ):

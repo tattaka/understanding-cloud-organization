@@ -24,10 +24,12 @@ class EncoderDecoder(Model):
         """Sequentially pass `x` trough model`s `encoder` and `decoder` (return logits!)"""
 #         x = self.encoder(x)
 #         x = self.decoder(x)
-        if self.tta: # WIP
+        if self.tta: 
             y1 =  self.decoder(self.encoder(x))
-            y2 = self.decoder(self.encoder(x.flip(3)))
-            y = (y1 + y2.flip(3)) * 0.5
+            y2 = self.decoder(self.encoder(x.flip(3))).flip(3)
+            y3 = self.decoder(self.encoder(x.flip(2))).flip(2)
+            y4 = self.decoder(self.encoder(x.flip((2, 3)))).flip((2, 3))
+            y = (y1 + y2 + y3 + y4) * 0.25
         else:
             y = self.decoder(self.encoder(x))
 #         print(x.size(), y.size())
@@ -53,3 +55,4 @@ class EncoderDecoder(Model):
                 x = self.activation(x)
 
         return x
+    

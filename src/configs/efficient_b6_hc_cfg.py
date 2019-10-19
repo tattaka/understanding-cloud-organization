@@ -12,10 +12,10 @@ class Config(object):
         self.path = "../input"
         self.task = "segmentation"
         self.model_type = "HyperColumns"
-        self.logdir = "../logs/segmentation_HyperColumns_efficientb6"
         self.fold_max = 4
         self.backborn = "efficientnet-b6"
         self.attention_type = "scse"
+        self.logdir = "../logs/"+self.task+"_"+self.model_type+"_"+self.backborn
         
         self.img_size = (320, 640)
         

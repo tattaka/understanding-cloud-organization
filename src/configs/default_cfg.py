@@ -13,12 +13,12 @@ class Config(object):
         self.task = "segmentation"
 #         self.model_type = "HyperColumns"
         self.model_type = "Unet"
-        self.logdir = "../logs/segmentation_Unet_efficientb6"
         self.fold_max = 4
 #         self.backborn = "resnet18" # 0.650
 #         self.backborn = "efficientnet-b4" # 0.652
         self.backborn = "efficientnet-b6"
         self.attention_type = "scse"
+        self.logdir = "../logs/"+self.task+"_"+self.model_type+"_"+self.backborn
         
         self.img_size = (320, 640)
         

@@ -72,7 +72,7 @@ def main(config):
     test_ids = sub['Image_Label'].apply(lambda x: x.split('_')[0]).drop_duplicates().values
 #     print(valid_ids)
     ENCODER = opts.backborn
-    ENCODER_WEIGHTS = 'imagenet'
+    ENCODER_WEIGHTS = opts.encoder_weights
     DEVICE = 'cuda'
 
     ACTIVATION = None
@@ -84,6 +84,7 @@ def main(config):
               task = opts.task,
               attention_type = opts.attention_type, 
               head = 'simple',
+              center = opts.center,
               tta = opts.tta
      )
     preprocessing_fn = encoders.get_preprocessing_fn(ENCODER, ENCODER_WEIGHTS)
@@ -119,13 +120,16 @@ def main(config):
                     probability = cv2.resize(probability, dsize=(525, 350), interpolation=cv2.INTER_LINEAR)
                 probabilities[i * 4 + j, :, :] += probability
     probabilities /= opts.fold_max
-    np.save(f'probabilities/{opts.logdir.split("/")[-1]}_valid.npy', probabilities)
+    if opts.tta:
+        np.save(f'probabilities/{opts.logdir.split("/")[-1]}_tta_valid.npy', probabilities)
+    else:
+        np.save(f'probabilities/{opts.logdir.split("/")[-1]}_valid.npy', probabilities)
     
     torch.cuda.empty_cache()
     gc.collect()
     
     class_params = {}
-    
+    cv_d = []
     for class_id in tqdm.trange(opts.class_num, desc='class_id', leave=False):
 #         print(class_id)
         attempts = []
@@ -146,19 +150,20 @@ def main(config):
                         d.append(1)
                     else:
                         d.append(dice(i, j))
-
                 attempts.append((t, ms, np.mean(d)))
 
         attempts_df = pd.DataFrame(attempts, columns=['threshold', 'size', 'dice'])
-
+        
 
         attempts_df = attempts_df.sort_values('dice', ascending=False)
         print(attempts_df.head())
+        cv_d.append(attempts_df['dice'].values[0])
         best_threshold = attempts_df['threshold'].values[0]
         best_size = attempts_df['size'].values[0]
 
         class_params[class_id] = (best_threshold, best_size)
-    
+    cv_d = np.array(cv_d)
+    print("CV Dice:", np.mean(cv_d))
     pathlist = ["../input/test_images/" + i.split("_")[0] for i in sub['Image_Label']]
     
     del masks
@@ -166,7 +171,7 @@ def main(config):
     del probabilities
     gc.collect()
     
-    ############# 推論する まだできてないです！！！！###################
+    ############# predict ###################
     probabilities = np.zeros((n_test, 4, 350, 525))
     for fold in tqdm.trange(opts.fold_max, desc='fold loop'):
         logdir = f"{opts.logdir}/fold{fold}" 
@@ -181,12 +186,14 @@ def main(config):
                 probabilities[i, j, :, :] += probability
         gc.collect()
     probabilities /= opts.fold_max
-    np.save(f'probabilities/{opts.logdir.split("/")[-1]}_test.npy', probabilities)
+    if opts.tta:
+        np.save(f'probabilities/{opts.logdir.split("/")[-1]}_tta_test.npy', probabilities)
+    else:
+        np.save(f'probabilities/{opts.logdir.split("/")[-1]}_test.npy', probabilities)
     image_id = 0
     print("##################### start post_process #####################")
     for i in tqdm.trange(n_test, desc='post porocess loop'):
         for probability in probabilities[i]:
-            # TODO: convex_modeをconfigで管理する
             predict, num_predict = post_process(sigmoid(probability), class_params[image_id % 4][0], class_params[image_id % 4][1], convex_mode=opts.convex_mode)
             if num_predict == 0:
                 encoded_pixels.append('')

@@ -28,6 +28,7 @@ class Config(object):
         self.max_epoch = 50
         
 #         self.scheduler = partial(ReduceLROnPlateau, factor=0.5, patience=2)
+        self.early_stop = True
         self.scheduler = partial(ReduceLROnPlateau, factor=0.1, patience=2)
         self.criterion = smp.utils.losses.BCEDiceLoss(eps=1.)
         self.accumeration = 2

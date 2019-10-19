@@ -209,23 +209,21 @@ def post_process(probability, threshold, min_size, convex_mode=None):
             num += 1
     return predictions, num
 
-
-
         
 def get_training_augmentation(size=(320, 640)):
+    resized_height = int(2100*(size[0]/size[1]))
     train_transform = [
 ############# 0.659 at eff-b6 #############
-        albu.Resize(1050, 2100),
-        albu.RandomSizedCrop(min_max_height=(840, 1050), height=size[0], width=size[1], w2h_ratio=2.0), 
+        albu.Resize(resized_height, 2100),
+        albu.RandomSizedCrop(min_max_height=(int(resized_height*0.8), resized_height), height=size[0], width=size[1], w2h_ratio=size[1]/size[0]), 
         albu.Flip(p=0.5), 
+#         albu.Solarize(p=0.5),#WIP
         albu.GridDistortion(p=0.5),
         albu.RandomBrightnessContrast(p=0.5),
         albu.RandomGamma(p=0.5),
+        albu.GaussNoise(p=0.5, var_limit=0.05), 
         albu.ShiftScaleRotate(scale_limit=0.2, rotate_limit=0, shift_limit=0.1, p=0.5, border_mode=0),
 #####################################
-#         albu.Resize(320, 640), 
-#         albu.Flip(p=0.25), 
-#         albu.ShiftScaleRotate(scale_limit=0.5, rotate_limit=0, shift_limit=0.1, p=0.5, border_mode=0),
     ]
     return albu.Compose(train_transform)
 
@@ -233,8 +231,6 @@ def get_training_augmentation(size=(320, 640)):
 def get_validation_augmentation(size=(320, 640)):
     """Add paddings to make image shape divisible by 32"""
     test_transform = [
-#         albu.Resize(320, 640),
-#         albu.Resize(320, 640)
         albu.Resize(size[0], size[1]), 
     ]
     return albu.Compose(test_transform)
@@ -273,3 +269,14 @@ def get_black_mask(image_path):
         lower = np.array([0, 0, 0], np.uint8)
         upper = np.array([180, 255, 10], np.uint8)
         return (~ (cv2.inRange(hsv, lower, upper) > 250)).astype(int)
+
+def image_per_normalize(img):
+    hsv = cv2.cvtColor(img, cv2.COLOR_RGB2HSV)
+    lower = np.array([0, 0, 0], np.uint8)
+    upper = np.array([180, 255, 10], np.uint8)
+    mask = (~ (cv2.inRange(hsv, lower, upper) > 250)).astype(float)
+    img = img.astype(np.float32) / 255.0
+    mean = np.sum(img, axis = (0, 1), keepdims=True) / np.count_nonzero(mask)
+    std = np.sqrt(np.sum(np.abs(img - mean)**2, axis=(0, 1), keepdims=True) / np.count_nonzero(mask))
+    result = (img - mean) / (std + 0.00001) * mask[:, :, None]
+    return result

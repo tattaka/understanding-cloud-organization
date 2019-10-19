@@ -21,6 +21,7 @@ def get_model(model_type: str = 'Unet',
               n_classes: int = 4,
               task: str = 'segmentation',
               attention_type: str = None, 
+              center: str = None,
               source: str = 'pretrainedmodels',
               head: str = 'simple', 
               tta:bool = False
@@ -34,6 +35,7 @@ def get_model(model_type: str = 'Unet',
                 classes=n_classes,
                 attention_type=attention_type,
                 activation=activation,
+                center=center,
                 tta=tta
             )
         elif model_type == 'HyperColumns':
@@ -43,6 +45,7 @@ def get_model(model_type: str = 'Unet',
                 classes=n_classes,
                 attention_type=attention_type,
                 activation=activation, 
+                center=center,
                 tta=tta
             )
 

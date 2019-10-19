@@ -90,7 +90,7 @@ def main(config):
         valid_ids_new = valid_ids_new['img_id'].values
         
         ENCODER = opts.backborn
-        ENCODER_WEIGHTS = 'imagenet'
+        ENCODER_WEIGHTS = opts.encoder_weights
         DEVICE = 'cuda'
 
         ACTIVATION = None
@@ -100,15 +100,20 @@ def main(config):
               activation = ACTIVATION,
               n_classes = opts.class_num,
               task = opts.task,
+              center = opts.center,
               attention_type = opts.attention_type, 
               head = 'simple'
          )
-
         preprocessing_fn = encoders.get_preprocessing_fn(ENCODER, ENCODER_WEIGHTS)
         
         num_workers = opts.num_workers
         bs = opts.batchsize
-        train_dataset = CloudDataset(df=train, datatype='train', img_ids=train_ids_new, transforms = get_training_augmentation(opts.img_size), preprocessing=get_preprocessing(preprocessing_fn))
+        
+        if opts.per_image_norm:
+            train_dataset = CloudDataset(df=train, per_image_norm=True, datatype='train', img_ids=train_ids_new, transforms = get_training_augmentation(opts.img_size), preprocessing=get_preprocessing(None))
+            valid_dataset = CloudDataset(df=train, per_image_norm=True, datatype='valid', img_ids=valid_ids_new, transforms = get_validation_augmentation(opts.img_size), preprocessing=get_preprocessing(None))
+        else:
+            train_dataset = CloudDataset(df=train, datatype='train', img_ids=train_ids_new, transforms = get_training_augmentation(opts.img_size), preprocessing=get_preprocessing(preprocessing_fn))
         valid_dataset = CloudDataset(df=train, datatype='valid', img_ids=valid_ids_new, transforms = get_validation_augmentation(opts.img_size), preprocessing=get_preprocessing(preprocessing_fn))
 
         train_loader = DataLoader(train_dataset, batch_size=bs, shuffle=True, num_workers=num_workers)
@@ -121,20 +126,28 @@ def main(config):
         num_epochs = opts.max_epoch
         logdir = f"{opts.logdir}/fold{fold}" 
         # TODO: get_optimizer()を作ってconfigでmodel管理する
-        optimizer = RAdam([
-            {'params': model.decoder.parameters(), 'lr': 1e-2}, 
-            {'params': model.encoder.parameters(), 'lr': 1e-3},  
-        ])
+        optimizer = get_optimizer(optimizer=opts.optimizer, lookahead=opts.lookahead, model=model, separate_decoder=True, lr=opts.lr, lr_e=opts.lr_e)
+#         optimizer = RAdam([
+#             {'params': model.decoder.parameters(), 'lr': 1e-2}, 
+#             {'params': model.encoder.parameters(), 'lr': 1e-3},  
+#         ])
         opt_level = 'O1'
         model.cuda()
         model, optimizer = amp.initialize(model, optimizer, opt_level=opt_level)
         scheduler = opts.scheduler(optimizer)
-#         scheduler = CosineAnnealingLR(optimizer, T_max=num_epochs, eta_min=0)
         criterion = opts.criterion
         runner = SupervisedRunner()
-        callbacks = [DiceCallback(), EarlyStoppingCallback(patience=5, min_delta=0.001)]
+        if opts.task == "segmentation":
+            callbacks=[DiceCallback()]
+        else:
+            callbacks=[]
+        if opts.early_stop:
+            callbacks.append(EarlyStoppingCallback(patience=10, min_delta=0.001))
+        
         if opts.accumeration is not None:
-            callbacks=[DiceCallback(), EarlyStoppingCallback(patience=5, min_delta=0.001), CriterionCallback(), OptimizerCallback(accumulation_steps=opts.accumeration)]
+            callbacks.append(CriterionCallback())
+            callbacks.append(OptimizerCallback(accumulation_steps=opts.accumeration))
+            
         print(f"############################## Start learning of fold{fold}! ##############################")
         runner.train(
             model=model,
