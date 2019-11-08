@@ -1,1 +1,1 @@
-from .encoder_decoder import EncoderDecoder
+from .encoder_decoder import EncoderDecoder, RefineEncoderDecoder

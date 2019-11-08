@@ -39,7 +39,8 @@ class FPN(EncoderDecoder):
             dropout=0.2,
             activation='sigmoid',
             final_upsampling=4,
-            decoder_merge_policy='add'
+            decoder_merge_policy='add',
+            tta=False 
     ):
         encoder = get_encoder(
             encoder_name,
@@ -56,6 +57,6 @@ class FPN(EncoderDecoder):
             merge_policy=decoder_merge_policy
         )
 
-        super().__init__(encoder, decoder, activation)
+        super().__init__(encoder, decoder, activation, tta)
 
         self.name = 'fpn-{}'.format(encoder_name)

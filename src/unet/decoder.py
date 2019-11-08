@@ -4,9 +4,9 @@ import torch.nn.functional as F
 import sys
 sys.path.append('../')
 
-from common.blocks import Conv2dReLU, SCSEModule
+from common.blocks import Conv2dReLU, SCSEModule, CBAMModule, AdaptiveConcatPool2d
 from base.model import Model
-
+from .center_block import *
 
 class DecoderBlock(nn.Module):
     def __init__(self, in_channels, out_channels, use_batchnorm=True, attention_type=None):
@@ -17,6 +17,9 @@ class DecoderBlock(nn.Module):
         elif attention_type == 'scse':
             self.attention1 = SCSEModule(in_channels)
             self.attention2 = SCSEModule(out_channels)
+        elif attention_type == 'cbam':
+            self.attention1 = CBAMModule(in_channels)
+            self.attention2 = CBAMModule(out_channels)
 
         self.block = nn.Sequential(
             Conv2dReLU(in_channels, out_channels, kernel_size=3, padding=1, use_batchnorm=use_batchnorm),
@@ -34,101 +37,6 @@ class DecoderBlock(nn.Module):
         x = self.attention2(x)
         return x
 
-
-class CenterBlock(nn.Module):
-    def __init__(self, in_channels, out_channels, use_batchnorm=True, attention_type=None, upsample=True):
-        super().__init__()
-        self.block = nn.Sequential(
-            Conv2dReLU(in_channels, out_channels, kernel_size=1, use_batchnorm=use_batchnorm),
-            Conv2dReLU(out_channels, out_channels, kernel_size=1, use_batchnorm=use_batchnorm),
-        )
-
-    def forward(self, x):
-        return self.block(x)
-        
-class FeaturePyramidAttention(nn.Module):
-    def __init__(self, channels):
-        """
-        Feature Pyramid Attention
-        https://github.com/JaveyWang/Pyramid-Attention-Networks-pytorch/blob/master/networks.py
-        :type channels: int
-        """
-        super(FeaturePyramidAttention, self).__init__()
-        channels_mid = int(channels/4)
-
-        self.channels_cond = channels
-
-        # Master branch
-        self.conv_master = nn.Conv2d(self.channels_cond, channels, kernel_size=1, bias=False)
-        self.bn_master = nn.BatchNorm2d(channels)
-
-        # Global pooling branch
-        self.conv_gpb = nn.Conv2d(self.channels_cond, channels, kernel_size=1, bias=False)
-        self.bn_gpb = nn.BatchNorm2d(channels)
-
-        # C333 because of the shape of last feature maps is (16, 16).
-        self.conv7x7_1 = nn.Conv2d(self.channels_cond, channels_mid, kernel_size=(7, 7), stride=2, padding=3, bias=False)
-        self.bn1_1 = nn.BatchNorm2d(channels_mid)
-        self.conv5x5_1 = nn.Conv2d(channels_mid, channels_mid, kernel_size=(5, 5), stride=2, padding=2, bias=False)
-        self.bn2_1 = nn.BatchNorm2d(channels_mid)
-        self.conv3x3_1 = nn.Conv2d(channels_mid, channels_mid, kernel_size=(3, 3), stride=2, padding=1, bias=False)
-        self.bn3_1 = nn.BatchNorm2d(channels_mid)
-
-        self.conv7x7_2 = nn.Conv2d(channels_mid, channels, kernel_size=(7, 7), stride=1, padding=3, bias=False)
-        self.bn1_2 = nn.BatchNorm2d(channels)
-        self.conv5x5_2 = nn.Conv2d(channels_mid, channels, kernel_size=(5, 5), stride=1, padding=2, bias=False)
-        self.bn2_2 = nn.BatchNorm2d(channels)
-        self.conv3x3_2 = nn.Conv2d(channels_mid, channels, kernel_size=(3, 3), stride=1, padding=1, bias=False)
-        self.bn3_2 = nn.BatchNorm2d(channels)
-
-        self.relu = nn.ReLU(inplace=True)
-
-    def forward(self, x):
-        # Master branch
-        h, w = x.size(2), x.size(3)
-        x_master = self.conv_master(x)
-        x_master = self.bn_master(x_master)
-
-        # Global pooling branch
-        x_gpb = nn.AvgPool2d(x.shape[2:])(x).view(x.shape[0], self.channels_cond, 1, 1)
-        x_gpb = self.conv_gpb(x_gpb)
-        x_gpb = self.bn_gpb(x_gpb)
-
-        # Branch 1
-        x1_1 = self.conv7x7_1(x)
-        x1_1 = self.bn1_1(x1_1)
-        x1_1 = self.relu(x1_1)
-        x1_2 = self.conv7x7_2(x1_1)
-        x1_2 = self.bn1_2(x1_2)
-        x1_2 = self.relu(x1_2)
-
-        # Branch 2
-        x2_1 = self.conv5x5_1(x1_1)
-        x2_1 = self.bn2_1(x2_1)
-        x2_1 = self.relu(x2_1)
-        x2_2 = self.conv5x5_2(x2_1)
-        x2_2 = self.bn2_2(x2_2)
-        x2_2 = self.relu(x2_2)
-
-        # Branch 3
-        x3_1 = self.conv3x3_1(x2_1)
-        x3_1 = self.bn3_1(x3_1)
-        x3_1 = self.relu(x3_1)
-        x3_2 = self.conv3x3_2(x3_1)
-        x3_2 = self.bn3_2(x3_2)
-        x3_2 = self.relu(x3_2)
-
-        # Merge branch 1 and 
-        x3_upsample = nn.Upsample(size=(h // 4, w // 4), mode='bilinear', align_corners=True)(x3_2)
-        x2_merge = x2_2 + x3_upsample
-        x2_upsample = nn.Upsample(size=(h // 2, w // 2), mode='bilinear', align_corners=True)(x2_2)
-        x1_merge = x1_2 + x2_upsample
-        x_master = x_master * nn.Upsample(size=(h, w), mode='bilinear', align_corners=True)(x1_merge)
-        
-        out = x_master + x_gpb
-
-        return out
-
 class UnetDecoder(Model):
 
     def __init__(
@@ -138,7 +46,8 @@ class UnetDecoder(Model):
             final_channels=1,
             use_batchnorm=True,
             center=None,
-            attention_type=None
+            attention_type=None,
+            classification = False,
     ):
         super().__init__()
 
@@ -147,7 +56,10 @@ class UnetDecoder(Model):
             self.center = CenterBlock(channels, channels, use_batchnorm=use_batchnorm)
         elif center == 'fpa':
             channels = encoder_channels[0]
-            self.center = FeaturePyramidAttention(channels)
+            self.center = FPA(channels)
+        elif center == 'aspp':
+            channels = encoder_channels[0]
+            self.center = ASPP(channels, channels, dilations=[1, (1, 6), (2, 12), (3, 18)])
         else:
             self.center = None
 
@@ -165,7 +77,16 @@ class UnetDecoder(Model):
         self.layer5 = DecoderBlock(in_channels[4], out_channels[4],
                                    use_batchnorm=use_batchnorm, attention_type=attention_type)
         self.final_conv = nn.Conv2d(out_channels[4], final_channels, kernel_size=(1, 1))
-
+        
+        self.classification = classification
+        if self.classification:
+            self.linear_feature = nn.Sequential(
+                nn.Conv2d(encoder_channels[0], 64, kernel_size=1),
+                AdaptiveConcatPool2d(1),
+                Flatten(),
+                nn.Dropout(),
+                nn.Linear(128, final_channels)
+            )
         self.initialize()
 
     def compute_channels(self, encoder_channels, decoder_channels):
@@ -191,8 +112,11 @@ class UnetDecoder(Model):
         x = self.layer4([x, skips[3]])
         x = self.layer5([x, None])
         x = self.final_conv(x)
+        if self.classification:
+            class_refine = self.linear_feature(encoder_head)[:, :, None, None]
+#             print(x.size(), class_refine.size())
+            x = x * class_refine
         return x
-    
     
 class HyperColumnsDecoder(Model):
     def __init__(
@@ -211,7 +135,10 @@ class HyperColumnsDecoder(Model):
             self.center = CenterBlock(channels, channels, use_batchnorm=use_batchnorm)
         elif center == 'fpa':
             channels = encoder_channels[0]
-            self.center = FeaturePyramidAttention(channels)
+            self.center = FPA(channels)
+        elif center == 'aspp':
+            channels = encoder_channels[0]
+            self.center = ASPP(inplanes=channels, mid_c=channels/2, dilations=[1, 6, 12, 18])
         else:
             self.center = None
 
@@ -289,3 +216,7 @@ class HyperColumnsDecoder(Model):
         x = self.hc_conv(x)
 
         return x
+    
+class Flatten(nn.Module):
+    def forward(self, input):
+        return input.view(input.size(0), -1)

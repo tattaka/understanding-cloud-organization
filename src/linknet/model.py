@@ -35,6 +35,7 @@ class Linknet(EncoderDecoder):
             decoder_use_batchnorm=True,
             classes=1,
             activation='sigmoid',
+            tta = False
     ):
         encoder = get_encoder(
             encoder_name,
@@ -48,6 +49,6 @@ class Linknet(EncoderDecoder):
             use_batchnorm=decoder_use_batchnorm,
         )
 
-        super().__init__(encoder, decoder, activation)
+        super().__init__(encoder, decoder, activation, tta)
 
         self.name = 'link-{}'.format(encoder_name)

@@ -16,15 +16,14 @@ class Config(object):
 
         self.per_image_norm = False #0.659
         self.optimizer = "RAdam"
-        self.backborn = "efficientnet-b6"
-        self.attention_type = "scse"
+        self.backborn = "se_resnext101_32x4d"
         self.encoder_weights = "imagenet"
-        self.center = None
-        self.logdir = "../logs/"+self.task+"_"+self.model_type+"_"+self.backborn 
+        self.attention_type = "scse"
+#         self.attention_type = None
+        self.logdir = "../logs/"+self.task+"_"+self.model_type+"_"+self.backborn
         
         self.img_size = (320, 640)
-#         self.img_size = (384, 768) # Use fpa
-#         self.img_size = (256, 512) # Use fpa
+#         self.img_size = (480, 480)
         
         
         self.batchsize = 16
@@ -34,7 +33,6 @@ class Config(object):
         self.max_epoch = 50
         
         self.optimizer = "RAdam"
-#         self.lr = 1e-2 #0.659
         self.lr = 1e-2
         self.lr_e = 1e-3
         self.lookahead = False

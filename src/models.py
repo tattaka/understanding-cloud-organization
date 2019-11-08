@@ -6,12 +6,15 @@ import torchvision
 import torch
 from typing import Optional, Type
 
-from utils import * 
-from losses import * 
+from cloud_utils import * 
 from dataset import * 
 from optimizers import * 
 import encoders
+
 import unet.model
+import fpn.model
+import linknet.model
+import pspnet.model
 
 
 def get_model(model_type: str = 'Unet',
@@ -24,7 +27,8 @@ def get_model(model_type: str = 'Unet',
               center: str = None,
               source: str = 'pretrainedmodels',
               head: str = 'simple', 
-              tta:bool = False
+              tta:bool = False,
+              classification:bool = False
              ):
     
     if task == 'segmentation':
@@ -36,7 +40,8 @@ def get_model(model_type: str = 'Unet',
                 attention_type=attention_type,
                 activation=activation,
                 center=center,
-                tta=tta
+                tta=tta, 
+                classification = classification
             )
         elif model_type == 'HyperColumns':
             model = unet.model.HyperColumns(
@@ -66,6 +71,14 @@ def get_model(model_type: str = 'Unet',
                 activation=activation,
                 tta=tta
             )
+        elif model_type == 'PSPNet':
+            model = pspnet.model.PSPNet(
+                encoder_name=encoder,
+                encoder_weights=encoder_weights,
+                classes=n_classes,
+                activation=activation,
+                tta=tta
+            )
 
 #         elif model_type == 'resnet34_fpn':
 #             model = resnet34_fpn(num_classes=n_classes, fpn_features=128)
@@ -87,6 +100,34 @@ def get_model(model_type: str = 'Unet',
             model.last_linear = nn.Linear(model.last_linear.in_features, n_classes)
         else:
             model = Net(net=model)
+
+    return model
+
+def get_ref_model(
+               infer_model,
+              encoder: str = 'resnet18',
+              encoder_weights: str = 'imagenet',
+              activation: str = None,
+              n_classes: int = 4,
+              center:str = None,
+              attention_type:str=None,
+              source: str = 'pretrainedmodels',
+              tta:bool = False,
+              preprocess = True
+             ):
+    
+    model = unet.model.Ref_Unet(
+        infer_model = infer_model, 
+        encoder_name=encoder,
+        encoder_weights=encoder_weights,
+        classes=n_classes,
+        activation=activation,
+        center=center,
+        attention_type=attention_type,
+        tta=tta,
+        adapt_input = n_classes+3,
+        preprocess = preprocess
+    )
 
     return model
 
@@ -130,16 +171,3 @@ class Net(nn.Module):
         logits = self.net(x)
         return logits
 
-
-class AdaptiveConcatPool2d(nn.Module):
-    "Layer that concats `AdaptiveAvgPool2d` and `AdaptiveMaxPool2d`."
-    def __init__(self,
-                 size: Optional[int] = None):
-        "Output will be 2*size or 2 if size is None"
-        super().__init__()
-        size = size or 1
-        self.ap = nn.AdaptiveAvgPool2d(size)
-        self.mp = nn.AdaptiveMaxPool2d(size)
-
-    def forward(self, x: Type[torch.Tensor]) -> Type[torch.Tensor]:
-        return torch.cat([self.mp(x), self.ap(x)], 1)

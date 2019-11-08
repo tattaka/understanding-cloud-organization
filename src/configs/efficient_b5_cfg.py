@@ -13,39 +13,31 @@ class Config(object):
         self.task = "segmentation"
         self.model_type = "Unet"
         self.fold_max = 4
-
-        self.per_image_norm = False #0.659
-        self.optimizer = "RAdam"
-        self.backborn = "efficientnet-b6"
-        self.attention_type = "scse"
-        self.encoder_weights = "imagenet"
+        self.backborn = "efficientnet-b5"
         self.center = None
-        self.logdir = "../logs/"+self.task+"_"+self.model_type+"_"+self.backborn 
+        self.attention_type = "scse"
+        self.logdir = "../logs/"+self.task+"_"+self.model_type+"_"+self.backborn
         
         self.img_size = (320, 640)
-#         self.img_size = (384, 768) # Use fpa
-#         self.img_size = (256, 512) # Use fpa
+#         self.img_size = (480, 480)
         
         
         self.batchsize = 16
         self.class_num = 4
         
         self.num_workers = 8
+#         self.max_epoch = 30
         self.max_epoch = 50
         
-        self.optimizer = "RAdam"
-#         self.lr = 1e-2 #0.659
-        self.lr = 1e-2
-        self.lr_e = 1e-3
-        self.lookahead = False
-        
+#         self.scheduler = partial(CosineAnnealingLR, T_max=self.max_epoch, eta_min=1e-6, last_epoch=-1)
+
         self.early_stop = True
-#         self.scheduler = partial(ReduceLROnPlateau, factor=0.5, patience=2)
         self.scheduler = partial(ReduceLROnPlateau, factor=0.1, patience=2)
+        
         self.criterion = smp.utils.losses.BCEDiceLoss(eps=1.)
         self.accumeration = 4
+#         self.convex_mode = None # 0.659
 #         self.tta = False
         self.tta = True # 0.659
-        self.convex_mode = None # 0.659
-#         self.convex_mode = "convex" # 0.659
+        self.convex_mode = "convex" # 0.659
         

@@ -49,6 +49,11 @@ from models import *
 from sync_batchnorm import convert_model
 import encoders
 
+def sharpen(p,t=0.5):
+    if t!=0:
+        return p**t
+    else:
+        return p
 
 def main(config):
     opts = config()
@@ -69,78 +74,33 @@ def main(config):
     
     valid_ids = pd.read_csv("csvs/valid_threshold.csv")["img_id"].values
     test_ids = sub['Image_Label'].apply(lambda x: x.split('_')[0]).drop_duplicates().values
-#     print(valid_ids)
-    ENCODER = opts.backborn
-    ENCODER_WEIGHTS = opts.encoder_weights
-    DEVICE = 'cuda'
-
-    ACTIVATION = None
-    model = get_model(model_type=opts.model_type,
-              encoder = ENCODER,
-              encoder_weights = ENCODER_WEIGHTS,
-              activation = ACTIVATION,
-              n_classes = opts.class_num,
-              task = opts.task,
-              attention_type = opts.attention_type, 
-              head = 'simple',
-              center = opts.center,
-              tta = opts.tta
-     )
-    if opts.refine:
-        model = get_ref_model(infer_model = model,
-                  encoder = opts.ref_backborn,
-                  encoder_weights = ENCODER_WEIGHTS,
-                  activation = ACTIVATION,
-                  n_classes = opts.class_num,
-                  preprocess = opts.preprocess,
-                  tta = opts.tta
-         )
-    model = convert_model(model)
-    preprocessing_fn = encoders.get_preprocessing_fn(ENCODER, ENCODER_WEIGHTS)
     
-    encoded_pixels = []
-    runner = SupervisedRunner()
     probabilities = np.zeros((2220, 350, 525))
+    preprocessing_fn = encoders.get_preprocessing_fn("efficientnet-b3", "imagenet")
     
-    for i in range(opts.fold_max):
-        if opts.refine:
-            logdir = f"{opts.logdir}_refine/fold{i}" 
-        else:
-            logdir = f"{opts.logdir}/fold{i}" 
-        valid_dataset = CloudDataset(df=train, datatype='valid', img_ids=valid_ids, transforms = get_validation_augmentation(opts.img_size), preprocessing=get_preprocessing(preprocessing_fn))
-        valid_loader = DataLoader(valid_dataset, batch_size=8, shuffle=False, num_workers=opts.num_workers)
-        loaders = {"infer": valid_loader}
-        runner.infer(
-            model=model,
-            loaders=loaders,
-            callbacks=[
-                CheckpointCallback(
-                    resume=f"{logdir}/checkpoints/best.pth"),
-                InferCallback()
-            ],
-        )
-        valid_masks = []
-        for i, (batch, output) in enumerate(tqdm.tqdm(zip(
-                valid_dataset, runner.callbacks[0].predictions["logits"]))):
-            image, mask = batch
-            for m in mask:
-                if m.shape != (350, 525):
-                    m = cv2.resize(m, dsize=(525, 350), interpolation=cv2.INTER_LINEAR)
-                valid_masks.append(m)
-
-            for j, probability in enumerate(output):
-                if probability.shape != (350, 525):
-                    probability = cv2.resize(probability, dsize=(525, 350), interpolation=cv2.INTER_LINEAR)
-                probabilities[i * 4 + j, :, :] += probability
-                
-    probabilities /= opts.fold_max
-    if opts.tta:
-        np.save(f'probabilities/{opts.logdir.split("/")[-1]}_tta_valid.npy', probabilities)
+    valid_dataset = CloudDataset(df=train, datatype='valid', img_ids=valid_ids, transforms = get_validation_augmentation((350, 525)), preprocessing=get_preprocessing(preprocessing_fn))
+    valid_loader = DataLoader(valid_dataset, batch_size=8, shuffle=False, num_workers=8)
+    valid_masks = []
+    for i, batch in enumerate(tqdm.tqdm(valid_loader)):
+        image, mask = batch
+        for bm in mask:
+            for m in bm:
+                valid_masks.append(m.cpu().numpy())
+    
+    for i, stem in tqdm.tqdm(enumerate(opts.ensemble_filestems)):
+        # read npy
+        probability = np.load("probabilities/"+stem+"_valid.npy")
+        if opts.ensemble_weight is not None:
+            probability = probability * opts.ensemble_weight[i]
+#         probability = sharpen(probability, t=opts.temp)
+        probability = sharpen(sigmoid(probability), t=opts.temp)
+        probabilities += probability
+    if opts.ensemble_weight is None:
+        probabilities /= len(opts.ensemble_filestems)
     else:
-        np.save(f'probabilities/{opts.logdir.split("/")[-1]}_valid.npy', probabilities)
-    
-    torch.cuda.empty_cache()
-    gc.collect()
+        probabilities /= sum(opts.ensemble_weight)
+
+    np.save(f'probabilities/ensemble_valid.npy', probabilities)
     
     class_params = {}
     cv_d = []
@@ -153,13 +113,12 @@ def main(config):
                 masks = []
                 for i in range(class_id, len(probabilities), 4):
                     probability = probabilities[i]
-                    predict, num_predict = post_process(sigmoid(probability), t, ms, convex_mode=opts.convex_mode) 
-
+                    predict, num_predict = post_process(probability, t, ms, convex_mode=opts.convex_mode) 
+#                     predict, num_predict = post_process(sigmoid(probability), t, ms, convex_mode=opts.convex_mode) 
                     masks.append(predict)
 
                 d = []
                 for i, j in zip(masks, valid_masks[class_id::4]):
-#                     print(i.shape, j.shape)
                     if (i.sum() == 0) & (j.sum() == 0):
                         d.append(1)
                     else:
@@ -187,32 +146,27 @@ def main(config):
     
     ############# predict ###################
     probabilities = np.zeros((n_test, 4, 350, 525))
-    for fold in tqdm.trange(opts.fold_max, desc='fold loop'):
-        if opts.refine:
-            logdir = f"{opts.logdir}_refine/fold{fold}" 
-        else:
-            logdir = f"{opts.logdir}/fold{fold}"
-#         loaders = {"test": test_loader}
-#         test_dataset = CloudDataset(df=sub, datatype='test', img_ids=test_ids, transforms = get_validation_augmentation(opts.img_size), preprocessing=get_preprocessing(preprocessing_fn))
-        test_dataset = CloudDataset(df=sub, datatype='test', img_ids=test_ids, transforms = get_validation_augmentation(opts.img_size), preprocessing=get_preprocessing(None))
-        test_loader = DataLoader(test_dataset, batch_size=64, shuffle=False, num_workers=opts.num_workers)
-        runner_out = runner.predict_loader(model, test_loader, resume=f"{logdir}/checkpoints/best.pth", verbose=True)
-        for i, batch in enumerate(tqdm.tqdm(runner_out, desc='probability loop')):
-            for j, probability in enumerate(batch):
-                if probability.shape != (350, 525):
-                    probability = cv2.resize(probability, dsize=(525, 350), interpolation=cv2.INTER_LINEAR)
-                probabilities[i, j, :, :] += probability
-        gc.collect()
-    probabilities /= opts.fold_max
-    if opts.tta:
-        np.save(f'probabilities/{opts.logdir.split("/")[-1]}_tta_test.npy', probabilities)
+    for i, stem in tqdm.tqdm(enumerate(opts.ensemble_filestems)):
+        # read npy
+        probability = np.load("probabilities/"+stem+"_test.npy")
+        if opts.ensemble_weight is not None:
+            probability = probability * opts.ensemble_weight[i]
+#         probability = sharpen(probability, t=opts.temp)
+        probability = sharpen(sigmoid(probability), t=opts.temp)
+        probabilities += probability
+    if opts.ensemble_weight is None:
+        probabilities /= len(opts.ensemble_filestems)
     else:
-        np.save(f'probabilities/{opts.logdir.split("/")[-1]}_test.npy', probabilities)
+        probabilities /= sum(opts.ensemble_weight)
+        
+    np.save(f'probabilities/ensemble_test.npy', probabilities)
+    encoded_pixels = []
     image_id = 0
     print("##################### start post_process #####################")
     for i in tqdm.trange(n_test, desc='post porocess loop'):
         for probability in probabilities[i]:
-            predict, num_predict = post_process(sigmoid(probability), class_params[image_id % 4][0], class_params[image_id % 4][1], convex_mode=opts.convex_mode)
+#             predict, num_predict = post_process(sigmoid(probability), class_params[image_id % 4][0], class_params[image_id % 4][1], convex_mode=opts.convex_mode)
+            predict, num_predict = post_process(probability, class_params[image_id % 4][0], class_params[image_id % 4][1], convex_mode=opts.convex_mode)
             if num_predict == 0:
                 encoded_pixels.append('')
             else:
@@ -225,7 +179,7 @@ def main(config):
     print("##################### Finish post_process #####################")
     #######################################
     sub['EncodedPixels'] = encoded_pixels
-    sub.to_csv(f'submissions/submission_{opts.logdir.split("/")[-1]}.csv', columns=['Image_Label', 'EncodedPixels'], index=False)
+    sub.to_csv(f'submissions/submission_segmentation_ensemble.csv', columns=['Image_Label', 'EncodedPixels'], index=False)
     
 
 if __name__ == '__main__':
