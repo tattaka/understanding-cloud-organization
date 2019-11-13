@@ -66,7 +66,7 @@ def main(config):
     opts = config()
     path = opts.path
     train = pd.read_csv(f'{path}/train.csv')
-    pseudo_label = pd.read_csv('./submissions/submission_segmentation_ensemble.csv')
+    pseudo_label = pd.read_csv('./submissions/submission_segmentation_and_classifier.csv')
     
     
     n_train = len(os.listdir(f'{path}/train_images'))
@@ -136,10 +136,11 @@ def main(config):
             
         ################# make pseudo label dataset #######################
         train_dataset_pl = CloudPseudoLabelDataset(df=pseudo_label, datatype='train', img_ids=train_ids_pl, transforms = get_training_augmentation(opts.img_size), preprocessing=get_preprocessing(preprocessing_fn))
-        valid_dataset_pl = CloudPseudoLabelDataset(df=pseudo_label, datatype='valid', img_ids=valid_ids_pl, transforms = get_validation_augmentation(opts.img_size), preprocessing=get_preprocessing(preprocessing_fn))
+        valid_dataset_pl = CloudPseudoLabelDataset(df=pseudo_label, datatype='train', img_ids=valid_ids_pl, transforms = get_validation_augmentation(opts.img_size), preprocessing=get_preprocessing(preprocessing_fn))
         
-        train_dataset = ConcatDataset([train_dataset, train_dataset_pl])
+#         train_dataset = ConcatDataset([train_dataset, train_dataset_pl])
 #         valid_dataset = ConcatDataset([valid_dataset, valid_dataset_pl])
+        train_dataset = ConcatDataset([train_dataset, valid_dataset_pl])
         ################# make pseudo label dataset #######################
         train_loader = DataLoader(train_dataset, batch_size=bs, shuffle=True, num_workers=num_workers, drop_last=True)
         valid_loader = DataLoader(valid_dataset, batch_size=bs, shuffle=False, num_workers=num_workers, drop_last=True)

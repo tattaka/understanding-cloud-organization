@@ -35,7 +35,7 @@ class Config(object):
         self.lr = 1e-2
         self.lr_e = 1e-3
         self.lookahead = False
-        
+        self.classification = False
         self.early_stop = True
         self.scheduler = partial(ReduceLROnPlateau, factor=0.1, patience=2)
         self.criterion = utils.losses.BCEDiceLoss(dice_bce_ratio=(0.7, 0.3))
@@ -47,7 +47,6 @@ class Config(object):
         self.mixup = False 
         self.label_smoothing_eps = 0 
         
-        self.classification = False
         self.refine = False
         self.ref_backborn = "efficientnet-b3"
         self.ref_attention_type = "cbam"

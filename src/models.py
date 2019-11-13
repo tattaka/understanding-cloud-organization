@@ -1,6 +1,5 @@
 import pretrainedmodels
 import segmentation_models_pytorch as smp
-# from .fpn import resnet34_fpn, effnetB4_fpn
 import torch.nn as nn
 import torchvision
 import torch
@@ -15,7 +14,9 @@ import unet.model
 import fpn.model
 import linknet.model
 import pspnet.model
-
+import refinenet.model
+import deeplab.model
+import fastfcn.model
 
 def get_model(model_type: str = 'Unet',
               encoder: str = 'resnet18',
@@ -32,7 +33,7 @@ def get_model(model_type: str = 'Unet',
              ):
     
     if task == 'segmentation':
-        if model_type == 'Unet':
+        if model_type == 'UNet':
             model = unet.model.Unet(
                 encoder_name=encoder,
                 encoder_weights=encoder_weights,
@@ -41,7 +42,6 @@ def get_model(model_type: str = 'Unet',
                 activation=activation,
                 center=center,
                 tta=tta, 
-                classification = classification
             )
         elif model_type == 'HyperColumns':
             model = unet.model.HyperColumns(
@@ -51,16 +51,16 @@ def get_model(model_type: str = 'Unet',
                 attention_type=attention_type,
                 activation=activation, 
                 center=center,
-                tta=tta
+                tta=tta,
             )
 
-        elif model_type == 'Linknet':
+        elif model_type == 'LinkNet':
             model = linknet.model.Linknet(
                 encoder_name=encoder,
                 encoder_weights=encoder_weights,
                 classes=n_classes,
                 activation=activation,
-                tta=tta
+                tta=tta,
             )
 
         elif model_type == 'FPN':
@@ -69,7 +69,7 @@ def get_model(model_type: str = 'Unet',
                 encoder_weights=encoder_weights,
                 classes=n_classes,
                 activation=activation,
-                tta=tta
+                tta=tta,
             )
         elif model_type == 'PSPNet':
             model = pspnet.model.PSPNet(
@@ -78,6 +78,37 @@ def get_model(model_type: str = 'Unet',
                 classes=n_classes,
                 activation=activation,
                 tta=tta
+            )
+        elif model_type == 'RefineNetPoolingImprove':
+            model = refinenet.model.RefineNetPoolingImprove(
+                encoder_name=encoder,
+                encoder_weights=encoder_weights,
+                classes=n_classes,
+                activation=activation,
+                tta=tta,
+            )
+        elif model_type == 'RefineNet':
+            model = refinenet.model.RefineNet(
+                encoder_name=encoder,
+                encoder_weights=encoder_weights,
+                classes=n_classes,
+                activation=activation,
+                tta=tta,
+            )
+        elif model_type == 'DeepLab':
+            model = deeplab.model.DeepLab(
+                encoder_name=encoder,
+                num_classes=n_classes,
+                activation=activation,
+                tta=tta,
+            )
+        elif model_type == 'FastFCN':
+            model = fastfcn.model.FastFCN(
+                encoder_name=encoder,
+                encoder_weights=encoder_weights,
+                classes=n_classes,
+                activation=activation,
+                tta=tta, 
             )
 
 #         elif model_type == 'resnet34_fpn':
@@ -171,3 +202,16 @@ class Net(nn.Module):
         logits = self.net(x)
         return logits
 
+if __name__ == '__main__':
+    x = np.zeros((3, 3, 384, 576), dtype="f")
+    x = torch.from_numpy(x)
+    print("input shape:", x.size())
+    model = get_model(model_type = 'FastFCN',
+              encoder= 'resnet50',
+              encoder_weights= 'imagenet',
+              activation = None,
+              n_classes = 4,
+              task = 'segmentation')
+
+    y = model(x)
+    print("out shape:", y.size())

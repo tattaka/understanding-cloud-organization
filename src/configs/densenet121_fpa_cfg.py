@@ -11,7 +11,7 @@ class Config(object):
         
         self.path = "../input"
         self.task = "segmentation"
-        self.model_type = "Unet"
+        self.model_type = "UNet"
         self.fold_max = 5
 
         self.per_image_norm = False 
@@ -35,10 +35,10 @@ class Config(object):
         self.lr = 1e-2
         self.lr_e = 1e-3
         self.lookahead = False
-        
+        self.classification = False
         self.early_stop = True
         self.scheduler = partial(ReduceLROnPlateau, factor=0.1, patience=2)
-        self.criterion = utils.losses.BCEDiceLoss(dice_bce_ratio=(0.7, 0.3))
+        self.criterion = utils.losses.BCEDiceLoss(dice_bce_ratio=(0.7, 0.3), classification = self.classification)
         self.accumeration = 2
         
         self.tta = True

@@ -127,12 +127,7 @@ def main(config):
         }
         num_epochs = opts.max_epoch
         logdir = f"{opts.logdir}/fold{fold}" 
-        # TODO: get_optimizer()を作ってconfigでmodel管理する
         optimizer = get_optimizer(optimizer=opts.optimizer, lookahead=opts.lookahead, model=model, separate_decoder=True, lr=opts.lr, lr_e=opts.lr_e)
-#         optimizer = RAdam([
-#             {'params': model.decoder.parameters(), 'lr': 1e-2}, 
-#             {'params': model.encoder.parameters(), 'lr': 1e-3},  
-#         ])
         opt_level = 'O1'
         model.cuda()
         model, optimizer = amp.initialize(model, optimizer, opt_level=opt_level)
@@ -163,49 +158,6 @@ def main(config):
             verbose=True
         )
         print(f"############################## Finish training of fold{fold}! ##############################")
-        if opts.refine:
-            model.load_state_dict(torch.load(f"{logdir}/checkpoints/best.pth"), strict=False)
-            ref_model = get_ref_model(infer_model = model,
-                  encoder = opts.ref_backborn,
-                  encoder_weights = ENCODER_WEIGHTS,
-                  activation = ACTIVATION,
-                  attention_type = opts.ref_attention_type,
-                  center = opts.ref_center,
-                  n_classes = opts.class_num,
-                  preprocess = opts.preprocess
-             )
-            ref_max_epochs = opts.ref_max_epoch
-            ref_logdir = f"{opts.logdir}_refine/fold{fold}" 
-            ref_optimizer = get_optimizer(optimizer=opts.optimizer, lookahead=opts.lookahead, model=ref_model, separate_decoder=True, lr=opts.ref_lr, lr_e=opts.ref_lr_e)
-            opt_level = 'O1'
-            
-            ref_model.cuda()
-            ref_model, ref_optimizer = amp.initialize(ref_model, ref_optimizer, opt_level=opt_level)
-            ref_scheduler = opts.scheduler(ref_optimizer)
-            
-            runner = SupervisedRunner()
-            
-            callbacks=[DiceCallback()]
-            if opts.early_stop:
-                callbacks.append(EarlyStoppingCallback(patience=10, min_delta=0.001))
-
-            if opts.accumeration is not None:
-                callbacks.append(CriterionCallback())
-                callbacks.append(OptimizerCallback(accumulation_steps=opts.accumeration))
-            print(f"############################## Start refine training of fold{fold}! ##############################")
-            runner.train(
-                model=ref_model,
-                criterion=opts.ref_criterion,
-                optimizer=ref_optimizer,
-                scheduler=ref_scheduler,
-                loaders=loaders,
-                callbacks=callbacks,
-                logdir=ref_logdir,
-                num_epochs=ref_max_epochs,
-                verbose=True
-            )
-            print(f"############################## Finish refine training of fold{fold}! ##############################")
-            del ref_model
         del model
         del loaders
         del runner
