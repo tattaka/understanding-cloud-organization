@@ -193,8 +193,7 @@ def main(config):
         else:
             logdir = f"{opts.logdir}/fold{fold}"
 #         loaders = {"test": test_loader}
-#         test_dataset = CloudDataset(df=sub, datatype='test', img_ids=test_ids, transforms = get_validation_augmentation(opts.img_size), preprocessing=get_preprocessing(preprocessing_fn))
-        test_dataset = CloudDataset(df=sub, datatype='test', img_ids=test_ids, transforms = get_validation_augmentation(opts.img_size), preprocessing=get_preprocessing(None))
+        test_dataset = CloudDataset(df=sub, datatype='test', img_ids=test_ids, transforms = get_validation_augmentation(opts.img_size), preprocessing=get_preprocessing(preprocessing_fn))
         test_loader = DataLoader(test_dataset, batch_size=64, shuffle=False, num_workers=opts.num_workers)
         runner_out = runner.predict_loader(model, test_loader, resume=f"{logdir}/checkpoints/best.pth", verbose=True)
         for i, batch in enumerate(tqdm.tqdm(runner_out, desc='probability loop')):
