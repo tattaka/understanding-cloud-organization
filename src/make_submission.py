@@ -108,7 +108,7 @@ def main(config):
         else:
             logdir = f"{opts.logdir}/fold{i}" 
         valid_dataset = CloudDataset(df=train, datatype='valid', img_ids=valid_ids, transforms = get_validation_augmentation(opts.img_size), preprocessing=get_preprocessing(preprocessing_fn))
-        valid_loader = DataLoader(valid_dataset, batch_size=8, shuffle=False, num_workers=opts.num_workers)
+        valid_loader = DataLoader(valid_dataset, batch_size=opts.batchsize, shuffle=False, num_workers=opts.num_workers)
         loaders = {"infer": valid_loader}
         runner.infer(
             model=model,
@@ -135,9 +135,9 @@ def main(config):
                 
     probabilities /= opts.fold_max
     if opts.tta:
-        np.save(f'probabilities/{opts.logdir.split("/")[-1]}_tta_valid.npy', probabilities)
+        np.save(f'probabilities/{opts.logdir.split("/")[-1]}_{opts.img_size[0]}x{opts.img_size[1]}_tta_valid.npy', probabilities)
     else:
-        np.save(f'probabilities/{opts.logdir.split("/")[-1]}_valid.npy', probabilities)
+        np.save(f'probabilities/{opts.logdir.split("/")[-1]}_{opts.img_size[0]}x{opts.img_size[1]}_valid.npy', probabilities)
     
     torch.cuda.empty_cache()
     gc.collect()
@@ -194,7 +194,7 @@ def main(config):
             logdir = f"{opts.logdir}/fold{fold}"
 #         loaders = {"test": test_loader}
         test_dataset = CloudDataset(df=sub, datatype='test', img_ids=test_ids, transforms = get_validation_augmentation(opts.img_size), preprocessing=get_preprocessing(preprocessing_fn))
-        test_loader = DataLoader(test_dataset, batch_size=64, shuffle=False, num_workers=opts.num_workers)
+        test_loader = DataLoader(test_dataset, batch_size=opts.batchsize, shuffle=False, num_workers=opts.num_workers)
         runner_out = runner.predict_loader(model, test_loader, resume=f"{logdir}/checkpoints/best.pth", verbose=True)
         for i, batch in enumerate(tqdm.tqdm(runner_out, desc='probability loop')):
             for j, probability in enumerate(batch):
@@ -204,9 +204,9 @@ def main(config):
         gc.collect()
     probabilities /= opts.fold_max
     if opts.tta:
-        np.save(f'probabilities/{opts.logdir.split("/")[-1]}_tta_test.npy', probabilities)
+        np.save(f'probabilities/{opts.logdir.split("/")[-1]}_{opts.img_size[0]}x{opts.img_size[1]}_tta_test.npy', probabilities)
     else:
-        np.save(f'probabilities/{opts.logdir.split("/")[-1]}_test.npy', probabilities)
+        np.save(f'probabilities/{opts.logdir.split("/")[-1]}_{opts.img_size[0]}x{opts.img_size[1]}_test.npy', probabilities)
     image_id = 0
     print("##################### start post_process #####################")
     for i in tqdm.trange(n_test, desc='post porocess loop'):
@@ -224,7 +224,7 @@ def main(config):
     print("##################### Finish post_process #####################")
     #######################################
     sub['EncodedPixels'] = encoded_pixels
-    sub.to_csv(f'submissions/submission_{opts.logdir.split("/")[-1]}.csv', columns=['Image_Label', 'EncodedPixels'], index=False)
+    sub.to_csv(f'submissions/submission_{opts.logdir.split("/")[-1]}_{opts.img_size[0]}x{opts.img_size[1]}.csv', columns=['Image_Label', 'EncodedPixels'], index=False)
     
 
 if __name__ == '__main__':

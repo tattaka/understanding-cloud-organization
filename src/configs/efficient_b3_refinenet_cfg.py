@@ -32,9 +32,11 @@ class Config(object):
         self.max_epoch = 40
         
         self.optimizer = "RAdam"
-        self.lr = 1e-3
+        self.lr = 5e-4
         self.lr_e = 1e-4
         self.lookahead = False
+        
+        self.classification = False
         
         self.early_stop = True
         self.scheduler = partial(ReduceLROnPlateau, factor=0.1, patience=2)

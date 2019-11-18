@@ -110,6 +110,14 @@ def get_model(model_type: str = 'Unet',
                 activation=activation,
                 tta=tta, 
             )
+        elif model_type == 'FastFCNImprove':
+            model = fastfcn.model.FastFCNImprove(
+                encoder_name=encoder,
+                encoder_weights=encoder_weights,
+                classes=n_classes,
+                activation=activation,
+                tta=tta, 
+            )
 
 #         elif model_type == 'resnet34_fpn':
 #             model = resnet34_fpn(num_classes=n_classes, fpn_features=128)

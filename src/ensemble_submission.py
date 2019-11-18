@@ -86,7 +86,21 @@ def main(config):
         for bm in mask:
             for m in bm:
                 valid_masks.append(m.cpu().numpy())
-    
+    for stem in opts.ensemble_filestems:
+        path = "probabilities/"+stem+"_valid.npy"
+        if not os.path.exists(path):
+            print(f"Not found {path} file!")
+            return None
+        else:
+            print(f"Found {path} file!")
+    for stem in opts.ensemble_filestems:
+        path = "probabilities/"+stem+"_test.npy"
+        if not os.path.exists(path):
+            print(f"Not found {path} file!")
+            return None
+        else:
+            print(f"Found {path} file!")
+        
     for i, stem in tqdm.tqdm(enumerate(opts.ensemble_filestems)):
         # read npy
         probability = np.load("probabilities/"+stem+"_valid.npy")
