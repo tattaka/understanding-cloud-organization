@@ -147,38 +147,35 @@ def main(config):
     for class_id in tqdm.trange(opts.class_num, desc='class_id', leave=False):
 #         print(class_id)
         attempts = []
-        for tt in tqdm.trange(0, 100, 10, desc='top_threshold', leave=False):
-            tt /= 100
-            for bt in tqdm.trange(0, 100, 10, desc='bot_threshold', leave=False):
-                bt /= 100
-                for ms in tqdm.tqdm([0, 100, 1000, 5000, 10000, 11000, 14000, 15000, 16000, 18000, 19000, 20000, 21000, 23000, 25000, 27000, 30000, 50000], desc='min_size', leave=False):
-                    masks = []
-                    for i in range(class_id, len(probabilities), 4):
-                        probability = probabilities[i]
-                        predict, num_predict = post_process(probability, tt, ms, bt) 
+        for t in tqdm.trange(0, 100, 10, desc='threshold', leave=False):
+            t /= 100
+            for ms in tqdm.tqdm([0, 100, 1000, 5000, 10000, 11000, 14000, 15000, 16000, 18000, 19000, 20000, 21000, 23000, 25000, 27000, 30000, 50000], desc='min_size', leave=False):
+                masks = []
+                for i in range(class_id, len(probabilities), 4):
+                    probability = probabilities[i]
+                    predict, num_predict = post_process_old(probability, t, ms, convex_mode=opts.convex_mode) 
 
-                        masks.append(predict)
+                    masks.append(predict)
 
-                    d = []
-                    for i, j in zip(masks, valid_masks[class_id::4]):
-    #                     print(i.shape, j.shape)
-                        if (i.sum() == 0) & (j.sum() == 0):
-                            d.append(1)
-                        else:
-                            d.append(dice(i, j))
-                    attempts.append((tt, ms, bt, np.mean(d)))
+                d = []
+                for i, j in zip(masks, valid_masks[class_id::4]):
+#                     print(i.shape, j.shape)
+                    if (i.sum() == 0) & (j.sum() == 0):
+                        d.append(1)
+                    else:
+                        d.append(dice(i, j))
+                attempts.append((t, ms, np.mean(d)))
 
-        attempts_df = pd.DataFrame(attempts, columns=['top_threshold', 'size', 'bottom_threshold', 'dice'])
+        attempts_df = pd.DataFrame(attempts, columns=['threshold', 'size', 'dice'])
         
 
         attempts_df = attempts_df.sort_values('dice', ascending=False)
         print(attempts_df.head())
         cv_d.append(attempts_df['dice'].values[0])
-        best_top_threshold = attempts_df['top_threshold'].values[0]
+        best_threshold = attempts_df['threshold'].values[0]
         best_size = attempts_df['size'].values[0]
-        best_bottom_threshold = attempts_df['bottom_threshold'].values[0]
 
-        class_params[class_id] = (best_top_threshold, best_size, best_bottom_threshold)
+        class_params[class_id] = (best_threshold, best_size)
     cv_d = np.array(cv_d)
     print("CV Dice:", np.mean(cv_d))
     pathlist = ["../input/test_images/" + i.split("_")[0] for i in sub['Image_Label']]
@@ -214,7 +211,7 @@ def main(config):
     print("##################### start post_process #####################")
     for i in tqdm.trange(n_test, desc='post porocess loop'):
         for probability in probabilities[i]:
-            predict, num_predict = post_process(probability, class_params[image_id % 4][0], class_params[image_id % 4][1], class_params[image_id % 4][2])
+            predict, num_predict = post_process_old(probability, class_params[image_id % 4][0], class_params[image_id % 4][1], convex_mode=opts.convex_mode)
             if num_predict == 0:
                 encoded_pixels.append('')
             else:

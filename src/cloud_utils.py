@@ -188,7 +188,7 @@ def draw_convex_hull(mask, mode='convex'):
             cv2.drawContours(img, [box], 0, (255, 255, 255),-1)
     return img/255.
 
-def post_process(probability, threshold, min_size, convex_mode=None):
+def post_process_old(probability, threshold, min_size, convex_mode=None):
     """
     Post processing of each predicted mask, components with lesser number of pixels
     than `min_size` are ignored
@@ -209,7 +209,27 @@ def post_process(probability, threshold, min_size, convex_mode=None):
             num += 1
     return predictions, num
 
-        
+def post_process(probability, top_score_threshold, min_size, bot_score_threshold):
+    """
+    Post processing of each predicted mask, components with lesser number of pixels
+    than `min_size` are ignored
+    """
+    # don't remember where I saw it
+    classification_mask = probability > top_score_threshold
+    mask = probability.copy()
+    if classification_mask.sum() < min_size:
+        mask = np.zeros_like(probability)
+    mask  = mask > bot_score_threshold
+    num_component, component = cv2.connectedComponents(mask.astype(np.uint8))
+    predictions = np.zeros((350, 525), np.float32)
+    num = 0
+    for c in range(1, num_component):
+        p = (component == c)
+        if p.sum() > min_size:
+            predictions[p] = 1
+            num += 1
+    return predictions, num
+    
 def get_training_augmentation(size=(320, 640)):
     train_transform = [
         albu.Resize(size[0], size[1]), 
