@@ -74,39 +74,3 @@ def f_score(pr, gt, beta=1, eps=1e-7, threshold=None, activation='sigmoid'):
             / ((1 + beta ** 2) * tp + beta ** 2 * fn + fp + eps)
 
     return score
-
-def f_score2(pr, gt, threshold=None, activation='sigmoid'):
-    """
-    Args:
-        pr (torch.Tensor): A list of predicted elements
-        gt (torch.Tensor):  A list of elements that are to be predicted
-        eps (float): epsilon to avoid zero division
-        threshold: threshold for outputs binarization
-    Returns:
-        float: F score
-    """
-
-    if activation is None or activation == "none":
-        activation_fn = lambda x: x
-    elif activation == "sigmoid":
-        activation_fn = torch.nn.Sigmoid()
-    elif activation == "softmax2d":
-        activation_fn = torch.nn.Softmax2d()
-    else:
-        raise NotImplementedError(
-            "Activation implemented for sigmoid and softmax2d"
-        )
-
-    pr = activation_fn(pr)
-
-    if threshold is not None:
-        pr = (pr > threshold).float()
-
-
-    intersect = torch.sum(gt * pr)
-    union = torch.sum(pr) - torch.sum(gt)
-    if union==0: return 1
-    
-    score = 2. * intersect / union
-
-    return score

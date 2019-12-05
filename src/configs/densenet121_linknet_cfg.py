@@ -40,7 +40,7 @@ class Config(object):
         
         self.early_stop = True
         self.scheduler = partial(ReduceLROnPlateau, factor=0.1, patience=2)
-        self.criterion = utils.losses.BCEDiceLoss(dice_bce_ratio=(0.7, 0.3), classification=self.classification)
+        self.criterion = utils.losses.BCEDiceLoss(dice_bce_ratio=(0.7, 0.3))
         self.accumeration = 2
 #         self.tta = False
         self.tta = True
